@@ -1,0 +1,297 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Founder Profile
+model Founder {
+  id            String   @id @default(cuid())
+  clerkId       String   @unique // Clerk user ID
+  email         String   @unique
+  name          String
+  company       String?
+  stage         Stage    @default(PRE_SEED)
+  timezone      String   @default("America/Los_Angeles")
+  workingHoursStart Int   @default(9) // Hour in 24h format
+  workingHoursEnd   Int   @default(18)
+  energyPeak    Int      @default(9) // Hour when most productive
+  preferences   Json?    @db.JsonB
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  calendarEvents CalendarEvent[]
+  tasks          Task[]
+  decisions      Decision[]
+  dailyNotes     DailyNote[]
+  journalEntries JournalEntry[]
+  companyMetrics CompanyMetrics[]
+  insights       Insight[]
+  
+  @@index([clerkId])
+  @@index([email])
+}
+
+enum Stage {
+  IDEA
+  PRE_SEED
+  SEED
+  SERIES_A
+  SERIES_B_PLUS
+}
+
+// Calendar Events
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  externalId  String?  @unique // Google Calendar event ID
+  title       String
+  description String?  @db.Text
+  startTime   DateTime
+  endTime     DateTime
+  attendees   Json?    @db.JsonB // Array of attendees
+  location    String?
+  
+  eventType   EventType @default(INTERNAL)
+  priority    Priority  @default(P1)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([founderId])
+  @@index([startTime])
+  @@index([eventType])
+}
+
+enum EventType {
+  INTERNAL
+  EXTERNAL
+  DEEP_WORK
+  PERSONAL
+  MEETING
+  FOUNDER_TIME
+}
+
+enum Priority {
+  P0 // Critical
+  P1 // High
+  P2 // Medium
+  P3 // Low
+}
+
+// Tasks
+model Task {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  externalId  String?  @unique // Notion/Linear ID
+  title       String
+  description String?  @db.Text
+  dueDate     DateTime?
+  priority    Priority @default(P1)
+  status      TaskStatus @default(TODO)
+  estimatedTime Int?   // Minutes
+  context     TaskContext @default(PRODUCT)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+  
+  @@index([founderId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([priority])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum TaskContext {
+  PRODUCT
+  SALES
+  OPS
+  FUNDRAISING
+  TEAM
+  PERSONAL
+}
+
+// Decisions
+model Decision {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  title       String
+  context     String   @db.Text
+  options     Json     @db.JsonB // Array of options
+  stakes      Stakes   @default(LOW)
+  reversible  Boolean  @default(true)
+  
+  madeAt      DateTime?
+  outcome     String?  @db.Text
+  deadline    DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([founderId])
+  @@index([madeAt])
+  @@index([stakes])
+}
+
+enum Stakes {
+  HIGH
+  LOW
+}
+
+// Company Metrics
+model CompanyMetrics {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @default(now())
+  revenue     Float?
+  mrr         Float?
+  arr         Float?
+  users       Int?
+  activeUsers Int?
+  runwayMonths Float?
+  burnRate    Float?
+  teamSize    Int?
+  customMetrics Json?  @db.JsonB
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([founderId, date])
+  @@index([founderId])
+  @@index([date])
+}
+
+// Journal Entries
+model JournalEntry {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @default(now())
+  type        EntryType @default(REFLECTION)
+  content     String   @db.Text
+  tags        String[]
+  
+  // Vector embedding for semantic search
+  embedding   Unsupported("vector(1536)")?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([founderId])
+  @@index([date])
+  @@index([type])
+}
+
+enum EntryType {
+  PROBLEM
+  IDEA
+  WIN
+  REFLECTION
+  GRATITUDE
+}
+
+// Daily Notes
+model DailyNote {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @unique
+  dayType     DayType  @default(BUILD)
+  
+  // Note sections (stored as JSON for flexibility)
+  executiveSummary Json  @db.JsonB
+  schedule         Json  @db.JsonB
+  decisions        Json  @db.JsonB
+  strategicGuidance Json @db.JsonB
+  problems         Json  @db.JsonB
+  wins             Json  @db.JsonB
+  
+  generatedAt DateTime @default(now())
+  viewedAt    DateTime?
+  feedback    Json?    @db.JsonB
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([founderId])
+  @@index([date])
+}
+
+enum DayType {
+  BUILD
+  SELL
+  THINK
+  REST
+}
+
+// AI-Generated Insights
+model Insight {
+  id          String   @id @default(cuid())
+  founderId   String
+  founder     Founder  @relation(fields: [founderId], references: [id], onDelete: Cascade)
+  
+  type        InsightType
+  confidence  Float    @default(0.5) // 0.0 to 1.0
+  title       String
+  description String   @db.Text
+  actionItems Json?    @db.JsonB
+  category    String?  // Energy, Meeting, Decision, Focus
+  
+  generatedAt DateTime @default(now())
+  dismissedAt DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([founderId])
+  @@index([type])
+  @@index([generatedAt])
+}
+
+enum InsightType {
+  PATTERN
+  RECOMMENDATION
+  WARNING
+  OPPORTUNITY
+}
+
+// OAuth Tokens (encrypted)
+model OAuthToken {
+  id            String   @id @default(cuid())
+  founderId     String
+  provider      String   // google, notion, linear
+  accessToken   String   @db.Text // Encrypted
+  refreshToken  String?  @db.Text // Encrypted
+  expiresAt     DateTime?
+  scope         String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([founderId, provider])
+  @@index([founderId])
+}
